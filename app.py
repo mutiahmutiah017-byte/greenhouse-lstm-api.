@@ -19,6 +19,8 @@ Lalu deploy ke layanan seperti Render/Railway/PythonAnywhere supaya
 website (yang berjalan di browser publik) bisa mengaksesnya.
 """
 
+import json
+import os
 import numpy as np
 import requests
 import joblib
@@ -27,6 +29,12 @@ from flask_cors import CORS
 from tensorflow import keras
 
 FB_HOST = "greenhouse-2c990-default-rtdb.asia-southeast1.firebasedatabase.app"
+
+# File riwayat training (accuracy & loss per-epoch) hasil train_lstm_classifier.py.
+# Dipakai untuk kurva accuracy/loss di dashboard website (revisi penguji poin 6).
+TRAINING_HISTORY_FILES = {
+    "classifier": "training_history.json",
+}
 
 app = Flask(__name__)
 CORS(app)  # izinkan website (domain berbeda) memanggil API ini
@@ -125,6 +133,32 @@ def predict(plant):
         },
         "forecast": forecast,  # daftar 6 langkah ke depan, untuk digambar sebagai pola/tren
     })
+
+
+@app.route("/training-history/<model_name>")
+def training_history(model_name):
+    """
+    Kembalikan riwayat accuracy & loss (train + validation) per-epoch dari
+    proses pelatihan model LSTM klasifikasi, untuk digambar sebagai kurva
+    di dashboard website (Chart.js, lihat script.js -> loadTrainingHistory()).
+
+    File training_history.json dibuat otomatis oleh
+    train_lstm_classifier.py setiap kali model dilatih ulang -- jalankan
+    ulang script itu (python train_lstm_classifier.py) untuk memperbarui
+    kurva ini setelah tuning learning rate / window / dsb.
+    """
+    path = TRAINING_HISTORY_FILES.get(model_name)
+    if not path or not os.path.exists(path):
+        return jsonify({
+            "error": (
+                f"Riwayat training untuk '{model_name}' belum ada. "
+                "Jalankan train_lstm_classifier.py terlebih dahulu supaya "
+                "training_history.json terbentuk."
+            )
+        }), 404
+    with open(path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+    return jsonify(data)
 
 
 if __name__ == "__main__":
